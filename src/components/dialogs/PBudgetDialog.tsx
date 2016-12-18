@@ -5,7 +5,7 @@ import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import { Col, Modal, Form, FormGroup, FormControl, ControlLabel, Radio, Glyphicon } from 'react-bootstrap';
 
-import { EntityFactory } from '../../persistence';
+import { EntityFactory, PersistenceManager } from '../../persistence';
 import { DataFormats, DateWithoutTime } from '../../utilities';
 import * as catalogEntities from '../../interfaces/catalogEntities';
 import { IISOCurrency, INumberFormat, IDataFormat } from '../../interfaces/formatters';
@@ -22,6 +22,7 @@ export interface PBudgetDialogState {
 
 	showModal:boolean;
 	isNewBudget:boolean;
+	isDropboxAvailable:boolean;
 	budgetEntity:catalogEntities.IBudget;
 	dataFormat:IDataFormat;
 	validationState:string;
@@ -70,6 +71,7 @@ export class PBudgetDialog extends React.Component<PBudgetDialogProps, PBudgetDi
 	private ctrlCurrency:FormControl;
 	private ctrlNumberFormat:FormControl;
 	private ctrlDateFormat:FormControl;
+	private ctrlCloudSync:FormControl;
 
 	constructor(props:PBudgetDialogProps) {
         super(props);
@@ -83,9 +85,11 @@ export class PBudgetDialog extends React.Component<PBudgetDialogProps, PBudgetDi
 		this.setCurrencySymbolPlacementToAfter = this.setCurrencySymbolPlacementToAfter.bind(this);
 		this.setCurrencySymbolPlacementToNone = this.setCurrencySymbolPlacementToNone.bind(this);
 		this.onDateFormatSelectionChange = this.onDateFormatSelectionChange.bind(this);
+		this.onCloudSyncSelectionChange = this.onCloudSyncSelectionChange.bind(this);
         this.state = { 
 			showModal: false,
 			isNewBudget: false,
+			isDropboxAvailable: false,
 			budgetEntity: null,
 			dataFormat: null,
 			validationState: null,
@@ -138,7 +142,15 @@ export class PBudgetDialog extends React.Component<PBudgetDialogProps, PBudgetDi
 
 	private hide():void {
 		// Hide the modal, and set the account in state to null
-		this.setState({ showModal:false, isNewBudget:false, budgetEntity:null, dataFormat:null, validationState:null, validationMessage: null });
+		this.setState({ 
+			showModal: false, 
+			isNewBudget: false, 
+			isDropboxAvailable: false, 
+			budgetEntity: null, 
+			dataFormat: null, 
+			validationState: null, 
+			validationMessage: null 
+		});
 	};
 
 	private save():void {
@@ -179,9 +191,12 @@ export class PBudgetDialog extends React.Component<PBudgetDialogProps, PBudgetDi
 			budgetEntity = Object.assign({}, budgetEntity);
 		}
 
+		var isDropboxAvailable = PersistenceManager.getInstance().isDropboxAvailable;
+
 		this.setState({ 
 			showModal: true,
 			isNewBudget: isNewBudget,
+			isDropboxAvailable: isDropboxAvailable,
 			budgetEntity: budgetEntity,
 			dataFormat: JSON.parse(budgetEntity.dataFormat),
 			validationState: null,
@@ -257,6 +272,17 @@ export class PBudgetDialog extends React.Component<PBudgetDialogProps, PBudgetDi
 		// Update the date format in the state
 		var state = Object.assign({}, this.state);
 		state.dataFormat.date_format = dateFormat;
+		this.setState(state);
+	}
+
+	private onCloudSyncSelectionChange(event:React.FormEvent<any>):void {
+	
+		debugger;
+		// Get the selected date format from the selection control
+		var isCloudSynced = (ReactDOM.findDOMNode(this.ctrlCloudSync) as any).value;
+		// Update the date format in the state
+		var state = Object.assign({}, this.state);
+		state.budgetEntity.isCloudSynced = isCloudSynced == '1' ? 1 : 0;
 		this.setState(state);
 	}
 
@@ -421,6 +447,27 @@ export class PBudgetDialog extends React.Component<PBudgetDialogProps, PBudgetDi
 		);		
 	}
 
+	private getCloudSyncSelectionControl():JSX.Element {
+
+		var allCloudSyncOptions:Array<JSX.Element> = [
+			<option key="use-dropbox" label="Cloud Sync this budget using Dropbox">1</option>,
+			<option key="keep-local" label="Keep it local on this machine">0</option>,
+		];
+
+		return (
+			<FormGroup>
+				<Col componentClass={ControlLabel} sm={4} style={LabelStyle}>
+					Cloud Sync:
+				</Col>
+				<Col sm={8} style={{paddingLeft:"6px"}}>
+					<FormControl ref={(c)=> {this.ctrlCloudSync = c;}} value={this.state.budgetEntity.isCloudSynced} componentClass="select" style={FormControlStyle} onChange={this.onCloudSyncSelectionChange}>
+						{allCloudSyncOptions}
+					</FormControl>
+				</Col>
+			</FormGroup>
+		);		
+	}
+
 	public render() {
 
 		if(this.state.showModal) {
@@ -432,6 +479,7 @@ export class PBudgetDialog extends React.Component<PBudgetDialogProps, PBudgetDi
 			var numberFormatSelectionControl = this.getNumberFormatSelectionControl();
 			var currencyPlacementControl = this.getCurrencySymbolPlacementControl();
 			var dateFormatSelectionControl = this.getDateFormatSelectionControl();
+			var cloudSyncSelectionControl = this.getCloudSyncSelectionControl();
 
 			return (
 				<div className="create-budget-dialog">
@@ -446,6 +494,7 @@ export class PBudgetDialog extends React.Component<PBudgetDialogProps, PBudgetDi
 								{numberFormatSelectionControl}
 								{currencyPlacementControl}
 								{dateFormatSelectionControl}
+								{cloudSyncSelectionControl}
 							</Form>
 						</Modal.Body>
 						<Modal.Footer>

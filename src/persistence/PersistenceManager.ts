@@ -63,6 +63,10 @@ export class PersistenceManager {
 	private subCategoryHelper = new persistenceHelpers.SubCategoryHelper();
 	private transactionHelper = new persistenceHelpers.TransactionHelper();
 
+	public get isDropboxAvailable():boolean {
+		return this.dropboxManager.dropboxAvailable;
+	}
+
 	public initialize(refreshDatabaseAtStartup:boolean = false):Promise<boolean> {
 
 		if(process.env.NODE_ENV === 'test') {

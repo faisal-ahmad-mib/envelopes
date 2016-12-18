@@ -14,6 +14,10 @@ export class DropboxManager {
 		return (process.env.NODE_ENV === 'development') ? "ENAB-DEV" : "ENAB";  
 	}
 
+	public get dropboxAvailable():boolean {
+		return this.dropboxFolderFound;
+	}
+
 	public initialize(deviceId:string):Promise<boolean> {
 
 		// Save the deviceId in the local variable
