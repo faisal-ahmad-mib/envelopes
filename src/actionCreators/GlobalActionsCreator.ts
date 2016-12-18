@@ -70,6 +70,10 @@ export class GlobalActionsCreator {
 
 					// Dispatch action to open the budget
 					dispatch(GlobalActionsCreator.openBudget(budget));
+				})
+				.catch((error)=>{
+					Logger.error(error.message);
+					Logger.error(error.stack);
 				});
 		};
 	}

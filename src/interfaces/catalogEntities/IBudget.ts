@@ -8,4 +8,5 @@ export interface IBudget extends IEntity {
 	lastMonth:string;
 	lastAccessedOn:number;
 	isTombstone:number;
+	isCloudSynced:number;
 }

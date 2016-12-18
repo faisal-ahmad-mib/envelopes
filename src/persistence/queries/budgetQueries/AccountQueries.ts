@@ -242,41 +242,4 @@ export class AccountQueries {
 			arguments: [budgetId, accountName]
 		};
 	}
-
-	public static debtPaymentActivityHeader(budgetId:string, debtPaymentAccountId:string, startDateUTCTime:number, endDateUTCTime:number):IDatabaseQuery {
-
-		return {
-			name: "debtPaymentActivityHeader",
-			query: `
-	/*
-
-	Values to populate the header for the  debt payment
-	(i.e. credit card) category activity transaction list.
-
-	Returns:
-	spent - sum of _credit_ spending for the debt payment account (doesn't include cash spending or transfers)
-	budgetedFor - amount of credit spending that was budgeted for
-
-	Query Paramaters:
-	?1 is the budgetId
-	?2 is the debt payment subCategoryId
-	?3 is the month you want to get the spent and budgetedFor balances
-	*/
-
-	SELECT
-	COALESCE(allSpending, 0) * -1 as spent, 
-	COALESCE(budgetedSpending, 0) * -1 as budgetedFor
-	FROM
-	MonthlySubCategoryBudgets MSCB
-	WHERE
-	MSCB.subCategoryId = ?2
-	AND
-	MSCB.month = ?3
-	AND
-	MSCB.budgetId = ?1
-
-	`,
-			arguments: [budgetId, debtPaymentAccountId, startDateUTCTime, endDateUTCTime]
-		};
-	}
 }

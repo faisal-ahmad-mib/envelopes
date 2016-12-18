@@ -154,6 +154,7 @@ export class BudgetFactory {
 					firstMonth: existingBudget.firstMonth,
 					lastMonth: existingBudget.lastMonth,
 					isTombstone: 0,
+					isCloudSynced: existingBudget.isCloudSynced,
 					deviceKnowledge: catalogKnowledge.getNextValue()
 				}));
 

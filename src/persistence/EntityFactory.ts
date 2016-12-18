@@ -11,6 +11,7 @@ export class EntityFactory {
 		var budget:catalogEntities.IBudget = {
 			entityId: KeyGenerator.generateUUID(),
 			isTombstone: 0,
+			isCloudSynced: 0,
 			budgetName: "",
 			lastAccessedOn: null,
 			dataFormat: JSON.stringify(DataFormats.locale_mappings["en_US"]),

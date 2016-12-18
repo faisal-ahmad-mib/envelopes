@@ -191,7 +191,8 @@ export class DatabaseFactory {
 					'lastAccessedOn' DATETIME,
 					'firstMonth' VARCHAR,
 					'lastMonth' VARCHAR,
-					'isTombstone' BOOL NOT NULL,
+					'isTombstone' BOOL NOT NULL DEFAULT 0,
+					'isCloudSynced' BOOL NOT NULL DEFAULT 0,
 					'deviceKnowledge' NUMERIC NOT NULL)`,
 				arguments: []
 			},

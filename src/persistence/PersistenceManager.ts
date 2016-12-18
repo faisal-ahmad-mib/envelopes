@@ -9,6 +9,7 @@ import { CalculationsManager } from './CalculationsManager';
 import { DropboxManager } from './DropboxManager';
 import * as commonInterfaces from '../interfaces/common'; 
 import { IImportedAccountObject } from '../interfaces/objects';
+import { IEntity } from '../interfaces/common';
 import * as catalogEntities from '../interfaces/catalogEntities';
 import * as budgetEntities from '../interfaces/budgetEntities';
 import * as catalogQueries from './queries/catalogQueries';
@@ -149,6 +150,7 @@ export class PersistenceManager {
 
 		var budgetId = this.activeBudget.entityId;
 		var budgetKnowledge = this.budgetKnowledge;
+		var changedEntitiesFromDatabase:ISimpleEntitiesCollection;
 
 		// Persist the passed entities into the database
 		return this.saveEntitiesToDatabase(updatedEntitiesCollection, existingEntitiesCollection)
@@ -164,6 +166,20 @@ export class PersistenceManager {
 				var budgetDeviceKnowledge = this.budgetKnowledge.lastDeviceKnowledgeLoadedFromLocalStorage;
 				var budgetDeviceKnowledgeForCalculations = this.budgetKnowledge.lastDeviceKnowledgeForCalculationsLoadedFromLocalStorage;
 				return this.loadEntitiesFromDatabase(budgetId, budgetDeviceKnowledge, budgetDeviceKnowledgeForCalculations, catalogDeviceKnowledge);
+			})
+			.then((moreUpdatedEntities:ISimpleEntitiesCollection)=>{
+
+				changedEntitiesFromDatabase = moreUpdatedEntities;
+				// We received some updated entities from the UI for persistence. As a result of those changes,
+				// some more entities would have been updated in the database (either by the persistence helpers
+				// or as a result of performing pending calculations). We are going to merge these two collections
+				// and write a diff file from the merged collection.
+				var mergedChangedEntities = this.getChangedEntitiesForDiff(updatedEntitiesCollection, moreUpdatedEntities);
+				return this.dropboxManager.writeDiffFile(this.activeBudget, mergedChangedEntities);
+			})
+			.then((retVal:boolean)=>{
+				// Return the changes loaded from database back so they can be merged into the in-memory state
+				return changedEntitiesFromDatabase;
 			});
 	}
 
@@ -411,5 +427,147 @@ export class PersistenceManager {
 				// resolve the promise with the result object
 				return Promise.resolve(result);
 			});
+	}
+
+	private getChangedEntitiesForDiff(changedEntities1:ISimpleEntitiesCollection, changedEntities2:ISimpleEntitiesCollection):ISimpleEntitiesCollection {
+
+		var mergedChanges:ISimpleEntitiesCollection = {
+			accounts: [].concat(
+				changedEntities1.accounts ? changedEntities1.accounts : []
+			),
+			masterCategories: [].concat(
+				changedEntities1.masterCategories ? changedEntities1.masterCategories : [],
+				changedEntities2.masterCategories ? changedEntities2.masterCategories : []
+			),
+			monthlyBudgets: [].concat(
+				changedEntities1.monthlyBudgets ? changedEntities1.monthlyBudgets : []
+			),
+			monthlySubCategoryBudgets: [].concat(
+				changedEntities1.monthlySubCategoryBudgets ? changedEntities1.monthlySubCategoryBudgets : []
+			),
+			payees: [].concat(
+				changedEntities1.payees ? changedEntities1.payees : [],
+				changedEntities2.payees ? changedEntities2.payees : []
+			),
+			payeeLocations: [].concat(
+				changedEntities1.payeeLocations ? changedEntities1.payeeLocations : [],
+				changedEntities2.payeeLocations ? changedEntities2.payeeLocations : []
+			),
+			payeeRenameConditions: [].concat(
+				changedEntities1.payeeRenameConditions ? changedEntities1.payeeRenameConditions : [],
+				changedEntities2.payeeRenameConditions ? changedEntities2.payeeRenameConditions : []
+			),
+			scheduledTransactions: [].concat(
+				changedEntities1.scheduledTransactions ? changedEntities1.scheduledTransactions : [],
+				changedEntities2.scheduledTransactions ? changedEntities2.scheduledTransactions : []
+			),
+			settings: [].concat(
+				changedEntities1.settings ? changedEntities1.settings : [],
+				changedEntities2.settings ? changedEntities2.settings : []
+			),
+			subCategories: [].concat(
+				changedEntities1.subCategories ? changedEntities1.subCategories : [],
+				changedEntities2.subCategories ? changedEntities2.subCategories : []
+			),
+			transactions: [].concat(
+				changedEntities1.transactions ? changedEntities1.transactions : [],
+				changedEntities2.transactions ? changedEntities2.transactions : []
+			)
+		}
+
+		mergedChanges.accounts = mergedChanges.accounts.length > 0 ? mergedChanges.accounts : undefined;
+		mergedChanges.masterCategories = mergedChanges.masterCategories.length > 0 ? mergedChanges.masterCategories : undefined;
+		mergedChanges.monthlyBudgets = mergedChanges.monthlyBudgets.length > 0 ? mergedChanges.monthlyBudgets : undefined;
+		mergedChanges.monthlySubCategoryBudgets = mergedChanges.monthlySubCategoryBudgets.length > 0 ? mergedChanges.monthlySubCategoryBudgets : undefined;
+		mergedChanges.payees = mergedChanges.payees.length > 0 ? mergedChanges.payees : undefined;
+		mergedChanges.payeeLocations = mergedChanges.payeeLocations.length > 0 ? mergedChanges.payeeLocations : undefined;
+		mergedChanges.payeeRenameConditions = mergedChanges.payeeRenameConditions.length > 0 ? mergedChanges.payeeRenameConditions : undefined;
+		mergedChanges.scheduledTransactions = mergedChanges.scheduledTransactions.length > 0 ? mergedChanges.scheduledTransactions : undefined;
+		mergedChanges.settings = mergedChanges.settings.length > 0 ? mergedChanges.settings : undefined;
+		mergedChanges.subCategories = mergedChanges.subCategories.length > 0 ? mergedChanges.subCategories : undefined;
+		mergedChanges.transactions = mergedChanges.transactions.length > 0 ? mergedChanges.transactions : undefined;
+
+		// Iterate through the entities and set all the calculated fields to undefined
+		if(mergedChanges.accounts) {
+			mergedChanges.accounts = _.map(mergedChanges.accounts, (account:budgetEntities.IAccount)=>{
+				account.clearedBalance = undefined;
+				account.unclearedBalance = undefined;
+				account.infoCount = undefined;
+				account.warningCount = undefined;
+				account.errorCount = undefined;
+				account.deviceKnowledgeForCalculatedFields = undefined;
+				return account;
+			});
+		}
+
+		if(mergedChanges.monthlyBudgets) {
+			mergedChanges.monthlyBudgets = _.map(mergedChanges.monthlyBudgets, (monthlyBudget:budgetEntities.IMonthlyBudget)=>{
+				monthlyBudget.previousIncome = undefined;
+				monthlyBudget.immediateIncome = undefined;
+				monthlyBudget.budgeted = undefined;
+				monthlyBudget.cashOutflows = undefined;
+				monthlyBudget.creditOutflows = undefined;
+				monthlyBudget.balance = undefined;
+				monthlyBudget.overSpent = undefined;
+				monthlyBudget.availableToBudget = undefined;
+				monthlyBudget.uncategorizedCashOutflows = undefined;
+				monthlyBudget.uncategorizedCreditOutflows = undefined;
+				monthlyBudget.uncategorizedBalance = undefined;
+				monthlyBudget.hiddenBudgeted = undefined;
+				monthlyBudget.hiddenCashOutflows = undefined;
+				monthlyBudget.hiddenCreditOutflows = undefined;
+				monthlyBudget.hiddenBalance = undefined;
+				monthlyBudget.additionalToBeBudgeted = undefined;
+				monthlyBudget.ageOfMoney = undefined;
+				monthlyBudget.deviceKnowledgeForCalculatedFields = undefined;
+				return monthlyBudget;
+			});
+		}
+
+		if(mergedChanges.monthlySubCategoryBudgets) {
+			mergedChanges.monthlySubCategoryBudgets = _.map(mergedChanges.monthlySubCategoryBudgets, (monthlySubCategoryBudget:budgetEntities.IMonthlySubCategoryBudget)=>{
+				monthlySubCategoryBudget.cashOutflows = undefined;
+				monthlySubCategoryBudget.positiveCashOutflows = undefined;
+				monthlySubCategoryBudget.creditOutflows = undefined;
+				monthlySubCategoryBudget.balance = undefined;
+				monthlySubCategoryBudget.budgetedCashOutflows = undefined;
+				monthlySubCategoryBudget.budgetedCreditOutflows = undefined;
+				monthlySubCategoryBudget.unBudgetedCashOutflows = undefined;
+				monthlySubCategoryBudget.unBudgetedCreditOutflows = undefined;
+				monthlySubCategoryBudget.budgetedPreviousMonth = undefined;
+				monthlySubCategoryBudget.spentPreviousMonth = undefined;
+				monthlySubCategoryBudget.paymentPreviousMonth = undefined;
+				monthlySubCategoryBudget.balancePreviousMonth = undefined;
+				monthlySubCategoryBudget.budgetedAverage = undefined;
+				monthlySubCategoryBudget.spentAverage = undefined;
+				monthlySubCategoryBudget.paymentAverage = undefined;
+				monthlySubCategoryBudget.budgetedSpending = undefined;
+				monthlySubCategoryBudget.allSpending = undefined;
+				monthlySubCategoryBudget.allSpendingSinceLastPayment = undefined;
+				monthlySubCategoryBudget.transactionsCount = undefined;
+				monthlySubCategoryBudget.upcomingTransactions = undefined;
+				monthlySubCategoryBudget.upcomingTransactionsCount = undefined;
+				monthlySubCategoryBudget.additionalToBeBudgeted = undefined;
+				monthlySubCategoryBudget.goalTarget = undefined;
+				monthlySubCategoryBudget.goalOverallFunded = undefined;
+				monthlySubCategoryBudget.goalOverallLeft = undefined;
+				monthlySubCategoryBudget.goalUnderFunded = undefined;
+				monthlySubCategoryBudget.goalExpectedCompletion = undefined;
+				monthlySubCategoryBudget.deviceKnowledgeForCalculatedFields = undefined;
+				return monthlySubCategoryBudget;
+			});
+		}
+		
+		if(mergedChanges.transactions) {
+			mergedChanges.transactions = _.map(mergedChanges.transactions, (transaction:budgetEntities.ITransaction)=>{
+				transaction.cashAmount = undefined;
+				transaction.creditAmount = undefined;
+				transaction.subCategoryCreditAmountPreceding = undefined;
+				transaction.deviceKnowledgeForCalculatedFields = undefined;
+				return transaction;
+			});
+		}
+		
+		return mergedChanges;
 	}
 }
