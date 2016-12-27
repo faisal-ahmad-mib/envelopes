@@ -4,31 +4,49 @@ const sqlite3 = require('sqlite3').verbose();
 const { Promise } = require('es6-promise');
 const { app, ipcMain } = require('electron');
 
-let database; 
+let budgetDatabase; 
+let logsDatabase;
 
 function initializeModule() {
 
 	// Start listening for ipc messages related to database
-	ipcMain.on('database-request', handleDatabaseMessage);
+	ipcMain.on('database-budget-request', handleDatabaseBudgetMessage);
+	ipcMain.on('database-logs-request', handleDatabaseLogsMessage);
 
-	// Initialize the database 
-	return initializeDatabase();
+	// Initialize the databases 
+	return initializeBudgetDatabase()
+		.then(()=>{
+			return initializeLogsDatabase();
+		})
+		.catch(function(error) {
+			console.log(error);
+		});
 }
 
 function finalizeModule() {
 
-	// Remove the listener from ipcMain
-	ipcMain.removeListener('database-request', handleDatabaseMessage);
+	// Remove the listeners from ipcMain
+	ipcMain.removeListener('database-budget-request', handleDatabaseBudgetMessage);
+	ipcMain.removeListener('database-logs-request', handleDatabaseLogsMessage);
 	// Close the database. We will re-initialize it if we activate.
-	closeDatabase();
+	return closeBudgetDatabase()
+		.then(()=>{
+			return closeLogsDatabase();
+		});
 }
 
-function handleDatabaseMessage(event, args) {
+function getAppFolderPath() {
+	var appFolderName = (process.env.NODE_ENV === 'development') ? "ENAB-DEV" : "ENAB";  
+	var appFolderPath = path.join(app.getPath('documents'), appFolderName);
+	return appFolderPath;
+}
+
+function handleDatabaseBudgetMessage(event, args) {
 
 	var requestId = args.requestId;
 	var queryList = args.queryList;
 
-	return executeDatabaseQueries(queryList)
+	return executeDatabaseQueries(budgetDatabase, queryList)
 		.then((resultObj)=>{
 			// Pass the result object received from the database back to the caller
 			event.sender.send(requestId, null, resultObj);
@@ -39,36 +57,74 @@ function handleDatabaseMessage(event, args) {
 		});
 }
 
-function initializeDatabase() {
+function handleDatabaseLogsMessage(event, args) {
+
+	var requestId = args.requestId;
+	var queryList = args.queryList;
+
+	return executeDatabaseQueries(logsDatabase, queryList)
+		.then((resultObj)=>{
+			// Pass the result object received from the database back to the caller
+			event.sender.send(requestId, null, resultObj);
+		})
+		.catch(function(error) {
+			// In case of error, send the error object back to the caller
+			event.sender.send(requestId, error, null);
+		});
+}
+
+function initializeBudgetDatabase() {
 
 	return new Promise((resolve, reject)=>{
 
-		var databaseFolderName = (process.env.NODE_ENV === 'development') ? "ENAB-DEV" : "ENAB";  
-		// Ensure that the directory for storing the database file exists
-		var databaseDir = path.join(app.getPath('documents'), databaseFolderName);
-		if (!fs.existsSync(databaseDir))
-			fs.mkdirSync(databaseDir);
+		var appFolderPath = getAppFolderPath();  
+		// Ensure that the directory for the app exists
+		if (!fs.existsSync(appFolderPath))
+			fs.mkdirSync(appFolderPath);
 
-		var databaseFileName = path.join(databaseDir,'enab.db');
+		var databaseFileName = path.join(appFolderPath,'enab.db');
 		// Open a connection to the database.
-		database = new sqlite3.Database(databaseFileName);
+		budgetDatabase = new sqlite3.Database(databaseFileName);
 		// Provide an error handler on the database object
-		database.on('error', (err)=>{
+		budgetDatabase.on('error', (err)=>{
 			reject(err);
 		});
 		// Provide a success handler to use the returned database object when it is opened
-		database.on('open', ()=>{
+		budgetDatabase.on('open', ()=>{
 			resolve(true);
 		});
 	});
 } 
 
-function closeDatabase() {
+function initializeLogsDatabase() {
 
 	return new Promise((resolve, reject)=>{
-		database.close(function(error) {
 
-			database = null;
+		var appFolderPath = getAppFolderPath();  
+		// Ensure that the directory for the app exists
+		if (!fs.existsSync(appFolderPath))
+			fs.mkdirSync(appFolderPath);
+
+		var databaseFileName = path.join(appFolderPath,'enab-log.db');
+		// Open a connection to the database.
+		logsDatabase = new sqlite3.Database(databaseFileName);
+		// Provide an error handler on the database object
+		logsDatabase.on('error', (err)=>{
+			reject(err);
+		});
+		// Provide a success handler to use the returned database object when it is opened
+		logsDatabase.on('open', ()=>{
+			resolve(true);
+		});
+	});
+} 
+
+function closeBudgetDatabase() {
+
+	return new Promise((resolve, reject)=>{
+		budgetDatabase.close(function(error) {
+
+			budgetDatabase = null;
 			if(error)
 				reject(error);
 
@@ -77,7 +133,21 @@ function closeDatabase() {
 	});
 }
 
-function executeDatabaseQueries(databaseQueries) {
+function closeLogsDatabase() {
+
+	return new Promise((resolve, reject)=>{
+		logsDatabase.close(function(error) {
+
+			logsDatabase = null;
+			if(error)
+				reject(error);
+
+			resolve();
+		});
+	});
+}
+
+function executeDatabaseQueries(database, databaseQueries) {
 
 	// We are getting an array of "IDatabaseQuery" objects here.
 	// Each IDatabaseQuery has the following properties
@@ -92,7 +162,7 @@ function executeDatabaseQueries(databaseQueries) {
 			// Start a transaction
 			database.exec('BEGIN');
 			var promises = databaseQueries.map(function(databaseQuery) {
-				return executeDatabaseQuery(databaseQuery, resultObj);
+				return executeDatabaseQuery(database, databaseQuery, resultObj);
 			});
 
 			Promise.all(promises)
@@ -112,7 +182,7 @@ function executeDatabaseQueries(databaseQueries) {
 	});
 }
 
-function executeDatabaseQuery(databaseQuery, resultObj) {
+function executeDatabaseQuery(database, databaseQuery, resultObj) {
 
 	return new Promise((resolve, reject)=>{
 

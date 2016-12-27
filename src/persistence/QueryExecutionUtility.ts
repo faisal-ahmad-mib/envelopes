@@ -17,18 +17,18 @@ export function executeSqlQueriesAndSaveKnowledge(queryList:Array<IDatabaseQuery
 	if(catalogKnowledge)
 		queryList.push( KnowledgeValueQueries.getSaveCatalogKnowledgeValueQuery(catalogKnowledge) );
 	queryList.push( KnowledgeValueQueries.getSaveBudgetKnowledgeValueQuery(budgetId, budgetKnowledge) );
-	return executeSqlQueries(queryList);
+	return executeSqlQueries(queryList, true);
 }
 
-export function executeSqlQueries(queryList:Array<IDatabaseQuery>):Promise<any> {
+export function executeSqlQueries(queryList:Array<IDatabaseQuery>, isBudgetQuery:boolean = true):Promise<any> {
 
 	if(process.env.NODE_ENV === 'test') 
-		return executeSqlQueriesInTestEnvironment(queryList);
+		return executeSqlQueriesInTestEnvironment(queryList, isBudgetQuery);
 	else 
-		return executeSqlQueriesInProductionEnvironment(queryList);
+		return executeSqlQueriesInProductionEnvironment(queryList, isBudgetQuery);
 }
 
-function executeSqlQueriesInProductionEnvironment(queryList:Array<IDatabaseQuery>):Promise<any> {
+function executeSqlQueriesInProductionEnvironment(queryList:Array<IDatabaseQuery>, isBudgetQuery:boolean):Promise<any> {
 
 	return new Promise<any>((resolve, reject)=>{
 
@@ -41,8 +41,10 @@ function executeSqlQueriesInProductionEnvironment(queryList:Array<IDatabaseQuery
 
 			// If there was an error, it would be in the first args position
 			if(args[0]) {
-				debugger; reject(args[0]);
+				debugger; 
+				reject(args[0]);
 			}
+
 			// Resolve the promise object with the data received from the main process
 			resolve(args[1]);
 		});
@@ -52,7 +54,8 @@ function executeSqlQueriesInProductionEnvironment(queryList:Array<IDatabaseQuery
 			queryList: queryList
 		};
 		// Send the request to the main process
-		ipcRenderer.send("database-request", payload);
+		var channelName = isBudgetQuery ? "database-budget-request" : "database-logs-request"; 
+		ipcRenderer.send(channelName, payload);
 	});
 }
 
@@ -67,8 +70,11 @@ export function setDatabaseReference(database):void {
 	_refDatabase = database;
 }
 
-function executeSqlQueriesInTestEnvironment(queryList:Array<IDatabaseQuery>):Promise<any> {
+function executeSqlQueriesInTestEnvironment(queryList:Array<IDatabaseQuery>, isBudgetQuery:boolean):Promise<any> {
 
+	if(!isBudgetQuery)
+		return Promise.resolve(null);
+		
 	var refDatabase = _refDatabase;
 	return new Promise<any>((resolve, reject)=>{
 		var results:any = {};

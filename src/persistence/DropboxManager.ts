@@ -72,6 +72,19 @@ export class DropboxManager {
 		});
 	}	
 
+	public writeDeviceInfoFile(budget:IBudget):Promise<boolean> {
+
+		return new Promise<any>((resolve, reject)=>{
+
+			// Get the fs and path modules
+			const remote = require('electron').remote;
+			const { app } = require('electron').remote;
+			const fs = remote.require('fs');
+			const path = remote.require('path');
+
+		});
+	}
+
 	public writeDiffFile(budget:IBudget, changedEntities:ISimpleEntitiesCollection):Promise<boolean> {
 
 		return new Promise<any>((resolve, reject)=>{
@@ -108,7 +121,7 @@ export class DropboxManager {
 		var diffFileName = `${Date.now().toString()}.diff`;
 		var diffFileFolderForBudget:string;
 
-		if(budget.isCloudSynced)
+		if(budget.isCloudSynced == 1)
 			diffFileFolderForBudget = path.join(this.dropboxDiffFolderPath, budget.entityId);
 		else
 			diffFileFolderForBudget = path.join(this.appDiffFolderPath, budget.entityId);
